@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mis Gastos</title>
+<meta name="theme-color" content="#111715">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="xlsx.full.min.js"></script>
+<style>
+/* Layout: una columna de libreta de bolsillo — pestañas de proyecto, saldo, carga rápida, desglose y movimientos */
+:root {
+  --bg: #f3f5f1;
+  --surface: #ffffff;
+  --ink: #17231f;
+  --muted: #5d6b65;
+  --line: #dde3dc;
+  --accent: #1f7a5a;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f0e9;
+  --danger: #b3412e;
+  --f-display: "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
+  --f-body: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: "Roboto Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111715; --surface: #1a2320; --ink: #e8efeb; --muted: #94a39c; --line: #2b3632;
+    --accent: #4cc497; --accent-ink: #0d1a15; --accent-soft: #1d3a2f; --danger: #ef7d68; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(48px, env(safe-area-inset-bottom, 0px));
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+header h1 { font-size: 22px; font-weight: 700; }
+.month { display: flex; align-items: center; gap: 4px; }
+.month button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; width: 34px; height: 34px; }
+.month span { min-width: 108px; text-align: center; font-weight: 600; }
+.month span::first-letter { text-transform: uppercase; }
+
+.tabs-scroll { overflow-x: auto; margin-inline: -4px; padding: 2px 4px 6px; scrollbar-width: none; }
+.tabs-scroll::-webkit-scrollbar { display: none; }
+.tabs { display: flex; gap: 6px; width: max-content; }
+.tab { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-weight: 500; white-space: nowrap; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+.tab.add-tab { border-style: dashed; color: var(--muted); }
+.projform { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.projform label { font-size: 13px; color: var(--muted); font-weight: 600; }
+.projform .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.projform input { flex: 1 1 180px; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; padding: 10px 12px; }
+.projform button { border-radius: 10px; padding: 10px 14px; border: 1px solid var(--line); background: var(--surface); }
+.projform button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+.total { display: flex; flex-direction: column; gap: 2px; }
+.label-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.total .label { color: var(--muted); font-size: 13px; }
+.text-btn { border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
+.total .amount { font-size: clamp(34px, 11vw, 46px); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; overflow-wrap: anywhere; }
+.total .amount.neg { color: var(--danger); }
+.flows { display: flex; gap: 8px 18px; flex-wrap: wrap; font-size: 14px; margin-top: 4px; }
+.flows span { color: var(--muted); }
+.flows b { font-family: var(--f-num); font-weight: 600; color: var(--ink); }
+.flows .in b { color: var(--accent); }
+.total .acum { margin-top: 8px; display: flex; align-self: flex-start; gap: 4px 14px; flex-wrap: wrap; align-items: baseline; background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.total .acum b { font-family: var(--f-num); font-weight: 600; }
+
+form.add { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; border-radius: 8px; padding: 8px; font-weight: 600; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg button.in[aria-pressed="true"] { color: var(--accent); }
+.amount-field { display: flex; align-items: baseline; gap: 8px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+form.add.is-ingreso .amount-field { border-bottom-color: var(--accent); }
+form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
+.amount-field span { font-family: var(--f-num); color: var(--muted); font-size: 20px; }
+.amount-field input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--f-num); font-size: 30px; font-weight: 600; outline: none; padding: 0; }
+.cats { display: flex; flex-wrap: wrap; gap: 8px; }
+.cat { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 7px 12px; font-size: 14px; }
+.cat[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row input { flex: 1 1 140px; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; padding: 10px 12px; }
+.row input[type="date"] { flex: 0 1 160px; }
+.save { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 12px; padding: 14px; font-weight: 600; font-size: 16px; }
+.msg { font-size: 13px; color: var(--muted); min-height: 1.2em; margin: -6px 0 0; }
+.msg.err { color: var(--danger); }
+
+.breakdown { display: flex; flex-direction: column; gap: 10px; }
+.bar { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.bar .track { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar .fill { height: 100%; background: var(--accent); border-radius: 3px; }
+.bar .pct { color: var(--muted); font-size: 12px; margin-left: 6px; }
+
+.list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; }
+.list .what { min-width: 0; }
+.list .what b { font-weight: 600; display: block; }
+.list .what small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .in-amt { color: var(--accent); }
+.del { border: 0; background: transparent; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; font-size: 18px; line-height: 1; }
+.del.confirm { background: var(--danger); color: #fff; width: auto; padding: 0 10px; font-size: 13px; font-weight: 600; }
+.empty { color: var(--muted); padding: 18px 14px; text-align: center; }
+.list li.empty { display: block; }
+
+.backup { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.backup p { margin: 0; color: var(--muted); font-size: 13px; }
+.backup p.warn { color: var(--danger); font-weight: 600; }
+.backup .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.link-btn { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+.link-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+@media (prefers-reduced-motion: no-preference) { .fill { transition: width .3s ease; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mis Gastos</h1>
+    <div class="month">
+      <button id="prev" type="button" aria-label="Mes anterior">‹</button>
+      <span id="monthLabel">—</span>
+      <button id="next" type="button" aria-label="Mes siguiente">›</button>
+    </div>
+  </header>
+
+  <nav class="tabs-scroll" aria-label="Proyectos">
+    <div class="tabs" id="tabs" role="tablist"></div>
+  </nav>
+  <form class="projform" id="projform" hidden>
+    <label for="projName" id="projLabel">Nombre del proyecto nuevo</label>
+    <div class="controls">
+      <input id="projName" maxlength="28">
+      <button class="primary" type="submit" id="projOk">Crear</button>
+      <button type="button" id="projCancel">Cancelar</button>
+    </div>
+  </form>
+
+  <section class="total" aria-live="polite">
+    <div class="label-row">
+      <span class="label" id="totalLabel">Saldo del mes</span>
+      <button class="text-btn" id="rename" type="button">Cambiar nombre</button>
+    </div>
+    <span class="amount num" id="total">₲ 0</span>
+    <div class="flows">
+      <span class="in">Ingresos <b id="inMes">₲ 0</b></span>
+      <span>Gastos <b id="outMes">₲ 0</b></span>
+    </div>
+    <div class="acum" id="acum" hidden>
+      <span>Acumulado del proyecto:</span>
+      <span>gastos <b id="acumOut">₲ 0</b></span>
+      <span>saldo <b id="acumSaldo">₲ 0</b></span>
+    </div>
+  </section>
+
+  <form class="add is-gasto" id="form" autocomplete="off">
+    <div class="seg" role="group" aria-label="Tipo de movimiento">
+      <button type="button" id="tGasto" aria-pressed="true">Gasto</button>
+      <button type="button" id="tIngreso" class="in" aria-pressed="false">Ingreso</button>
+    </div>
+    <label class="amount-field">
+      <span>₲</span>
+      <input id="monto" inputmode="numeric" placeholder="0" aria-label="Monto en guaraníes">
+    </label>
+    <div class="cats" id="cats" role="group" aria-label="Categoría"></div>
+    <div class="row">
+      <input id="nota" placeholder="Nota (opcional)" maxlength="80" aria-label="Nota">
+      <input id="fecha" type="date" aria-label="Fecha">
+    </div>
+    <button class="save" id="save" type="submit">Guardar</button>
+    <p class="msg" id="msg"></p>
+  </form>
+
+  <section class="breakdown" id="breakdownWrap">
+    <h2>Gastos por categoría</h2>
+    <div class="breakdown" id="breakdown"></div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:10px">
+    <h2>Movimientos</h2>
+    <ul class="list" id="list"><li class="empty">Cargando…</li></ul>
+  </section>
+
+  <section class="backup">
+    <h2>Respaldo</h2>
+    <p id="backupNote">Los datos se guardan solo en este celular. Descargá el Excel seguido como respaldo.</p>
+    <div class="btns">
+      <button class="link-btn primary" id="export" type="button">Descargar Excel</button>
+      <button class="link-btn" id="importBtn" type="button">Importar Excel</button>
+      <input type="file" id="importFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+    </div>
+    <p id="importMsg" hidden></p>
+  </section>
+</div>
+
+<script>
+const CATS = {
+  gasto: {
+    personal: ["Comida", "Súper", "Transporte", "Casa", "Servicios", "Salud", "Salidas", "Ropa", "Otros"],
+    obra: ["Materiales", "Mano de obra", "Herramientas", "Flete", "Servicios", "Impuestos", "Mantenimiento", "Otros"],
+  },
+  ingreso: {
+    personal: ["Sueldo", "Honorarios", "Ventas", "Alquiler", "Intereses", "Otros"],
+    obra: ["Alquiler", "Venta", "Aporte", "Seña", "Otros"],
+  },
+};
+const DEFAULT_PROYECTOS = [
+  { id: "personal", nombre: "Personal", tipo: "personal" },
+  { id: "tejido", nombre: "Tejido", tipo: "obra" },
+  { id: "rio", nombre: "Casa del Río", tipo: "obra" },
+  { id: "cde", nombre: "Propiedad CDE", tipo: "obra" },
+];
+const fmt = n => (n < 0 ? "−₲ " : "₲ ") + Math.round(Math.abs(n)).toLocaleString("es-PY");
+const pad = n => String(n).padStart(2, "0");
+const isoDe = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today = () => isoDe(new Date());
+const $ = id => document.getElementById(id);
+
+// Almacenamiento en el celular
+const K = { movs: "mg-movimientos", proy: "mg-proyectos", tab: "mg-tab", backup: "mg-ultimo-respaldo" };
+const leer = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch { return d; } };
+const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+navigator.storage?.persist?.().catch(() => {});
+
+let movs = leer(K.movs, []);   // [{id, proyecto, mov, monto, cat, nota, fecha, creado}]
+let proyectos = leer(K.proy, DEFAULT_PROYECTOS);
+let actual = leer(K.tab, "personal");
+let tipoMov = "gasto";
+let cat = null;
+let view = new Date(); view.setDate(1);
+let pendingDel = null;
+let projMode = null;
+
+const guardarMovs = () => escribir(K.movs, movs);
+const proyectoDe = g => g.proyecto || "personal";
+const movDe = g => g.mov === "ingreso" ? "ingreso" : "gasto";
+const proy = () => proyectos.find(p => p.id === actual) || proyectos[0];
+const sum = (arr, t) => arr.filter(g => movDe(g) === t).reduce((s, g) => s + g.monto, 0);
+const nuevoId = () => "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const slug = s => s.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "proyecto";
+
+function renderTabs() {
+  const t = $("tabs"); t.replaceChildren();
+  proyectos.forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab"; b.role = "tab"; b.textContent = p.nombre;
+    b.setAttribute("aria-selected", p.id === proy().id);
+    b.onclick = () => { actual = p.id; escribir(K.tab, actual); cat = null; pendingDel = null; closeProj(); render(); };
+    t.appendChild(b);
+  });
+  const add = document.createElement("button");
+  add.type = "button"; add.className = "tab add-tab"; add.textContent = "+ Proyecto";
+  add.onclick = () => openProj("nuevo");
+  t.appendChild(add);
+}
+
+function renderCats() {
+  const list = CATS[tipoMov][proy().tipo] || CATS[tipoMov].obra;
+  if (!list.includes(cat)) cat = list[0];
+  const c = $("cats"); c.replaceChildren();
+  list.forEach(name => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cat"; b.textContent = name;
+    b.setAttribute("aria-pressed", name === cat);
+    b.onclick = () => { cat = name; c.querySelectorAll(".cat").forEach(x => x.setAttribute("aria-pressed", x.textContent === name)); };
+    c.appendChild(b);
+  });
+}
+
+function setTipo(t) {
+  tipoMov = t; cat = null;
+  $("tGasto").setAttribute("aria-pressed", t === "gasto");
+  $("tIngreso").setAttribute("aria-pressed", t === "ingreso");
+  $("form").className = "add is-" + t;
+  render();
+}
+$("tGasto").onclick = () => setTipo("gasto");
+$("tIngreso").onclick = () => setTipo("ingreso");
+
+$("fecha").value = today();
+$("monto").addEventListener("input", e => {
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 12);
+  e.target.value = digits ? Number(digits).toLocaleString("es-PY") : "";
+});
+$("prev").onclick = () => { view.setMonth(view.getMonth() - 1); render(); };
+$("next").onclick = () => { view.setMonth(view.getMonth() + 1); render(); };
+
+function renderBackup() {
+  const ult = leer(K.backup, null);
+  const p = $("backupNote");
+  if (!movs.length) { p.className = ""; p.textContent = "Los datos se guardan solo en este celular. Si ya tenías movimientos en la versión anterior, importá ese Excel."; return; }
+  const dias = ult ? Math.floor((Date.now() - ult) / 86400000) : null;
+  if (dias === null) { p.className = "warn"; p.textContent = "Todavía no descargaste ningún respaldo. Los datos están solo en este celular."; }
+  else if (dias >= 30) { p.className = "warn"; p.textContent = `Último respaldo hace ${dias} días. Descargá el Excel para no perder datos.`; }
+  else { p.className = ""; p.textContent = dias === 0 ? "Último respaldo: hoy." : `Último respaldo hace ${dias} ${dias === 1 ? "día" : "días"}.`; }
+}
+
+function render() {
+  const p = proy();
+  renderTabs(); renderCats(); renderBackup();
+  $("save").textContent = `Guardar ${tipoMov} en ${p.nombre}`;
+  const key = `${view.getFullYear()}-${pad(view.getMonth()+1)}`;
+  $("monthLabel").textContent = view.toLocaleDateString("es-PY", { month: "long", year: "numeric" });
+  const delProy = movs.filter(g => proyectoDe(g) === p.id);
+  const mes = delProy.filter(g => g.fecha.startsWith(key)).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado - a.creado);
+  const inM = sum(mes, "ingreso"), outM = sum(mes, "gasto"), saldo = inM - outM;
+  $("totalLabel").textContent = `${p.nombre} · saldo del mes`;
+  $("total").textContent = fmt(saldo);
+  $("total").classList.toggle("neg", saldo < 0);
+  $("inMes").textContent = fmt(inM);
+  $("outMes").textContent = fmt(outM);
+  $("acum").hidden = p.tipo === "personal" || !delProy.length;
+  $("acumOut").textContent = fmt(sum(delProy, "gasto"));
+  $("acumSaldo").textContent = fmt(sum(delProy, "ingreso") - sum(delProy, "gasto"));
+
+  const gastosMes = mes.filter(g => movDe(g) === "gasto");
+  const por = {};
+  gastosMes.forEach(g => por[g.cat] = (por[g.cat] || 0) + g.monto);
+  const bd = $("breakdown"); bd.replaceChildren();
+  $("breakdownWrap").hidden = !gastosMes.length;
+  Object.entries(por).sort((a, b) => b[1] - a[1]).forEach(([c, v]) => {
+    const pc = outM ? v / outM * 100 : 0;
+    const row = document.createElement("div"); row.className = "bar";
+    const name = document.createElement("span"); name.textContent = c;
+    const val = document.createElement("span"); val.className = "num"; val.textContent = fmt(v);
+    const pct = document.createElement("span"); pct.className = "pct"; pct.textContent = Math.round(pc) + "%"; val.appendChild(pct);
+    const tr = document.createElement("div"); tr.className = "track";
+    const fill = document.createElement("div"); fill.className = "fill"; fill.style.width = pc + "%"; tr.appendChild(fill);
+    row.append(name, val, tr); bd.appendChild(row);
+  });
+
+  const ul = $("list"); ul.replaceChildren();
+  if (!mes.length) {
+    const li = document.createElement("li"); li.className = "empty";
+    li.textContent = `Acá van a aparecer los ingresos y gastos de ${p.nombre} de este mes.`;
+    ul.appendChild(li); return;
+  }
+  mes.forEach(g => {
+    const esIn = movDe(g) === "ingreso";
+    const li = document.createElement("li");
+    const what = document.createElement("div"); what.className = "what";
+    const b = document.createElement("b"); b.textContent = (esIn ? "Ingreso · " : "") + g.cat;
+    const s = document.createElement("small");
+    const [, m, d] = g.fecha.split("-");
+    s.textContent = `${d}/${m}` + (g.nota ? " · " + g.nota : "");
+    what.append(b, s);
+    const amt = document.createElement("span"); amt.className = "num" + (esIn ? " in-amt" : "");
+    amt.textContent = (esIn ? "+" : "−") + fmt(g.monto);
+    const del = document.createElement("button"); del.type = "button"; del.className = "del";
+    const confirming = pendingDel === g.id;
+    del.textContent = confirming ? "Borrar" : "×";
+    del.setAttribute("aria-label", confirming ? "Confirmar borrado" : "Borrar movimiento");
+    if (confirming) del.classList.add("confirm");
+    del.onclick = () => {
+      if (pendingDel !== g.id) { pendingDel = g.id; render(); setTimeout(() => { if (pendingDel === g.id) { pendingDel = null; render(); } }, 3000); return; }
+      pendingDel = null;
+      movs = movs.filter(x => x.id !== g.id); guardarMovs();
+      render();
+    };
+    li.append(what, amt, del); ul.appendChild(li);
+  });
+}
+
+function showMsg(t, err) { const m = $("msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); }
+
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const monto = Number($("monto").value.replace(/\D/g, ""));
+  if (!monto) { showMsg("Escribí un monto mayor a cero.", true); $("monto").focus(); return; }
+  const p = proy();
+  const g = { id: nuevoId(), proyecto: p.id, mov: tipoMov, monto, cat, nota: $("nota").value.trim(), fecha: $("fecha").value || today(), creado: Date.now() };
+  movs = [...movs, g];
+  if (!guardarMovs()) { movs = movs.filter(x => x.id !== g.id); showMsg("No se pudo guardar en el celular. Revisá que haya espacio libre.", true); return; }
+  $("monto").value = ""; $("nota").value = "";
+  showMsg(`Guardado ${tipoMov}: ${fmt(monto)} en ${p.nombre} · ${g.cat}.`);
+  const [y, m] = g.fecha.split("-").map(Number);
+  if (y !== view.getFullYear() || m !== view.getMonth() + 1) view = new Date(y, m - 1, 1);
+  render();
+});
+
+// Proyectos: crear y cambiar nombre
+function openProj(mode) {
+  projMode = mode;
+  $("projform").hidden = false;
+  $("projLabel").textContent = mode === "nuevo" ? "Nombre del proyecto nuevo" : `Nuevo nombre para “${proy().nombre}”`;
+  $("projOk").textContent = mode === "nuevo" ? "Crear" : "Guardar";
+  $("projName").value = mode === "nuevo" ? "" : proy().nombre;
+  $("projName").focus(); $("projName").select();
+}
+function closeProj() { projMode = null; $("projform").hidden = true; $("projName").value = ""; }
+function agregarProyecto(nombre, tipo = "obra") {
+  let id = slug(nombre), base = id, i = 2;
+  while (proyectos.some(p => p.id === id)) id = base + "-" + i++;
+  proyectos = [...proyectos, { id, nombre, tipo }];
+  return id;
+}
+$("rename").onclick = () => openProj("renombrar");
+$("projCancel").onclick = closeProj;
+$("projform").addEventListener("submit", e => {
+  e.preventDefault();
+  const nombre = $("projName").value.trim();
+  if (!nombre) return;
+  if (projMode === "renombrar") {
+    const id = proy().id;
+    proyectos = proyectos.map(p => p.id === id ? { ...p, nombre } : p);
+  } else {
+    actual = agregarProyecto(nombre); escribir(K.tab, actual);
+  }
+  escribir(K.proy, proyectos);
+  closeProj(); render();
+});
+
+// Excel: resumen + una hoja por proyecto
+function buildWorkbook() {
+  const wb = XLSX.utils.book_new();
+  const usados = new Set();
+  const hojaNombre = n => {
+    let s = n.replace(/[\[\]:*?\/\\]/g, "").slice(0, 31) || "Hoja", k = s, i = 2;
+    while (usados.has(k.toLowerCase())) k = s.slice(0, 28) + " " + i++;
+    usados.add(k.toLowerCase()); return k;
+  };
+  const resumen = [["Proyecto", "Movimientos", "Ingresos (₲)", "Gastos (₲)", "Saldo (₲)"]];
+  hojaNombre("Resumen");
+  const hojas = proyectos.map(p => {
+    const filas = movs.filter(g => proyectoDe(g) === p.id).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const tin = sum(filas, "ingreso"), tout = sum(filas, "gasto");
+    const rr = resumen.length + 1;
+    resumen.push([p.nombre, filas.length, tin, tout, { t: "n", f: `C${rr}-D${rr}`, v: tin - tout }]);
+    const aoa = [["Fecha", "Tipo", "Categoría", "Nota", "Ingreso (₲)", "Gasto (₲)"],
+      ...filas.map(g => { const esIn = movDe(g) === "ingreso"; return [new Date(g.fecha + "T12:00:00"), esIn ? "Ingreso" : "Gasto", g.cat, g.nota || "", esIn ? g.monto : "", esIn ? "" : g.monto]; })];
+    const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: "dd/mm/yyyy" });
+    const n = filas.length + 1, tr = n + 2;
+    XLSX.utils.sheet_add_aoa(ws, [
+      ["", "", "", "TOTAL", { t: "n", f: n > 1 ? `SUM(E2:E${n})` : "0", v: tin }, { t: "n", f: n > 1 ? `SUM(F2:F${n})` : "0", v: tout }],
+      ["", "", "", "SALDO", { t: "n", f: `E${tr}-F${tr}`, v: tin - tout }, ""],
+    ], { origin: n + 1 });
+    for (let r = 2; r <= n + 3; r++) {
+      for (const col of ["E", "F"]) { const c = ws[col + r]; if (c && c.t === "n") c.z = "#,##0"; }
+      const d = ws["A" + r]; if (d && d.t === "d") d.z = "dd/mm/yyyy";
+    }
+    ws["!cols"] = [{ wch: 12 }, { wch: 9 }, { wch: 16 }, { wch: 34 }, { wch: 16 }, { wch: 16 }];
+    return [hojaNombre(p.nombre), ws];
+  });
+  const r = resumen.length;
+  const tin = sum(movs, "ingreso"), tout = sum(movs, "gasto");
+  resumen.push(["TOTAL", { t: "n", f: `SUM(B2:B${r})`, v: movs.length }, { t: "n", f: `SUM(C2:C${r})`, v: tin }, { t: "n", f: `SUM(D2:D${r})`, v: tout }, { t: "n", f: `SUM(E2:E${r})`, v: tin - tout }]);
+  const wsR = XLSX.utils.aoa_to_sheet(resumen);
+  for (let i = 2; i <= r + 1; i++) for (const col of ["C", "D", "E"]) { const c = wsR[col + i]; if (c) c.z = "#,##0"; }
+  wsR["!cols"] = [{ wch: 20 }, { wch: 13 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsR, "Resumen");
+  hojas.forEach(([n, ws]) => XLSX.utils.book_append_sheet(wb, ws, n));
+  return wb;
+}
+
+$("export").onclick = () => {
+  const data = XLSX.write(buildWorkbook(), { type: "array", bookType: "xlsx" });
+  const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `gastos-${today()}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  escribir(K.backup, Date.now()); renderBackup();
+};
+
+// Importar un Excel descargado de esta app (o de la versión anterior en Claude)
+function parseFecha(v) {
+  if (v instanceof Date && !isNaN(v)) return isoDe(v);
+  if (typeof v === "number") { const d = XLSX.SSF.parse_date_code(v); return d ? `${d.y}-${pad(d.m)}-${pad(d.d)}` : null; }
+  if (typeof v === "string") {
+    let m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  return null;
+}
+function importar(wb) {
+  const clave = g => [proyectoDe(g), movDe(g), g.fecha, g.monto, g.cat, g.nota || ""].join("|");
+  const existentes = new Set(movs.map(clave));
+  let nuevos = 0, repetidos = 0;
+  for (const nombreHoja of wb.SheetNames) {
+    if (nombreHoja.toLowerCase() === "resumen") continue;
+    const filas = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, raw: true, defval: "" });
+    if (!filas.length) continue;
+    const head = filas[0].map(h => String(h).toLowerCase());
+    const col = pre => head.findIndex(h => h.startsWith(pre));
+    const iF = col("fecha"), iT = col("tipo"), iC = col("categ"), iN = col("nota"), iI = col("ingreso"), iG = col("gasto"), iM = col("monto");
+    if (iF < 0) continue;
+    let p = proyectos.find(x => x.nombre.toLowerCase() === nombreHoja.toLowerCase());
+    if (!p) { const id = agregarProyecto(nombreHoja, nombreHoja.toLowerCase() === "personal" ? "personal" : "obra"); p = proyectos.find(x => x.id === id); }
+    for (const f of filas.slice(1)) {
+      const fecha = parseFecha(f[iF]);
+      if (!fecha) continue;
+      let mov = "gasto", monto = 0;
+      const ing = iI >= 0 ? Number(f[iI]) || 0 : 0, gas = iG >= 0 ? Number(f[iG]) || 0 : 0;
+      if (ing > 0) { mov = "ingreso"; monto = ing; }
+      else if (gas > 0) monto = gas;
+      else if (iM >= 0) { monto = Number(f[iM]) || 0; if (iT >= 0 && String(f[iT]).toLowerCase().startsWith("ingreso")) mov = "ingreso"; }
+      if (!(monto > 0)) continue;
+      const g = { id: nuevoId(), proyecto: p.id, mov, monto: Math.round(monto), cat: String(f[iC] || "Otros"), nota: iN >= 0 ? String(f[iN] || "") : "", fecha, creado: Date.now() };
+      if (existentes.has(clave(g))) { repetidos++; continue; }
+      existentes.add(clave(g)); movs.push(g); nuevos++;
+    }
+  }
+  escribir(K.proy, proyectos);
+  guardarMovs();
+  return { nuevos, repetidos };
+}
+$("importBtn").onclick = () => $("importFile").click();
+$("importFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  const out = $("importMsg"); out.hidden = false; out.className = "";
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const { nuevos, repetidos } = importar(wb);
+    out.textContent = nuevos
+      ? `Listo: se importaron ${nuevos} movimientos` + (repetidos ? ` (${repetidos} ya estaban y no se duplicaron).` : ".")
+      : repetidos ? "Todos los movimientos de ese Excel ya estaban cargados." : "No encontré movimientos en ese archivo. Usá un Excel descargado de Mis Gastos.";
+    render();
+  } catch {
+    out.className = "warn"; out.textContent = "No se pudo leer el archivo. Tiene que ser un Excel (.xlsx) descargado de Mis Gastos.";
+  }
+});
+
+render();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
