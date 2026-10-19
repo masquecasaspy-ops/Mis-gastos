@@ -50,9 +50,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-header h1 { font-size: 22px; font-weight: 700; }
-.month { display: flex; align-items: center; gap: 4px; }
+.month { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
 .month button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; width: 34px; height: 34px; }
 .month span { min-width: 108px; text-align: center; font-weight: 600; }
 .month span::first-letter { text-transform: uppercase; }
@@ -132,15 +130,6 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Mis Gastos</h1>
-    <div class="month">
-      <button id="prev" type="button" aria-label="Mes anterior">‹</button>
-      <span id="monthLabel">—</span>
-      <button id="next" type="button" aria-label="Mes siguiente">›</button>
-    </div>
-  </header>
-
   <nav class="tabs-scroll" aria-label="Proyectos">
     <div class="tabs" id="tabs" role="tablist"></div>
   </nav>
@@ -172,6 +161,11 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
   </form>
 
   <section class="total" aria-live="polite">
+    <div class="month">
+      <button id="prev" type="button" aria-label="Mes anterior">‹</button>
+      <span id="monthLabel">—</span>
+      <button id="next" type="button" aria-label="Mes siguiente">›</button>
+    </div>
     <div class="label-row">
       <span class="label" id="totalLabel">Saldo del mes</span>
       <button class="text-btn" id="rename" type="button">Cambiar nombre</button>
@@ -321,7 +315,7 @@ function render() {
   const delProy = movs.filter(g => proyectoDe(g) === p.id);
   const mes = delProy.filter(g => g.fecha.startsWith(key)).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado - a.creado);
   const inM = sum(mes, "ingreso"), outM = sum(mes, "gasto"), saldo = inM - outM;
-  $("totalLabel").textContent = `${p.nombre} · saldo del mes`;
+  $("totalLabel").textContent = `Saldo de ${p.nombre}`;
   $("total").textContent = fmt(saldo);
   $("total").classList.toggle("neg", saldo < 0);
   $("inMes").textContent = fmt(inM);
