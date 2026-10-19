@@ -153,23 +153,6 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
     </div>
   </form>
 
-  <section class="total" aria-live="polite">
-    <div class="label-row">
-      <span class="label" id="totalLabel">Saldo del mes</span>
-      <button class="text-btn" id="rename" type="button">Cambiar nombre</button>
-    </div>
-    <span class="amount num" id="total">₲ 0</span>
-    <div class="flows">
-      <span class="in">Ingresos <b id="inMes">₲ 0</b></span>
-      <span>Gastos <b id="outMes">₲ 0</b></span>
-    </div>
-    <div class="acum" id="acum" hidden>
-      <span>Acumulado del proyecto:</span>
-      <span>gastos <b id="acumOut">₲ 0</b></span>
-      <span>saldo <b id="acumSaldo">₲ 0</b></span>
-    </div>
-  </section>
-
   <form class="add is-gasto" id="form" autocomplete="off">
     <div class="seg" role="group" aria-label="Tipo de movimiento">
       <button type="button" id="tGasto" aria-pressed="true">Gasto</button>
@@ -187,6 +170,23 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
     <button class="save" id="save" type="submit">Guardar</button>
     <p class="msg" id="msg"></p>
   </form>
+
+  <section class="total" aria-live="polite">
+    <div class="label-row">
+      <span class="label" id="totalLabel">Saldo del mes</span>
+      <button class="text-btn" id="rename" type="button">Cambiar nombre</button>
+    </div>
+    <span class="amount num" id="total">₲ 0</span>
+    <div class="flows">
+      <span class="in">Ingresos <b id="inMes">₲ 0</b></span>
+      <span>Gastos <b id="outMes">₲ 0</b></span>
+    </div>
+    <div class="acum" id="acum" hidden>
+      <span>Acumulado del proyecto:</span>
+      <span>gastos <b id="acumOut">₲ 0</b></span>
+      <span>saldo <b id="acumSaldo">₲ 0</b></span>
+    </div>
+  </section>
 
   <section class="breakdown" id="breakdownWrap">
     <h2>Gastos por categoría</h2>
