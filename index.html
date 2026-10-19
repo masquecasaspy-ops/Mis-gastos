@@ -124,6 +124,9 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
 .backup p.warn { color: var(--danger); font-weight: 600; }
 .backup .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .link-btn { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+.drive-form { display: flex; flex-direction: column; gap: 8px; }
+.drive-form input { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; padding: 10px 12px; }
+.backup p.ok { color: var(--accent); font-weight: 600; }
 .link-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 @media (prefers-reduced-motion: no-preference) { .fill { transition: width .3s ease; } }
 </style>
@@ -190,6 +193,20 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
   <section style="display:flex;flex-direction:column;gap:10px">
     <h2>Movimientos</h2>
     <ul class="list" id="list"><li class="empty">Cargando…</li></ul>
+  </section>
+
+  <section class="backup" id="driveSec">
+    <h2>Google Sheets</h2>
+    <p id="driveNote">Conectá la app con tu planilla de Google para que cada movimiento se anote solo.</p>
+    <form class="drive-form" id="driveForm" autocomplete="off">
+      <input id="driveUrl" placeholder="Dirección de la aplicación web (https://script.google.com/…)" aria-label="Dirección de la aplicación web">
+      <input id="driveClave" placeholder="Clave" aria-label="Clave">
+      <button class="link-btn primary" type="submit">Conectar</button>
+    </form>
+    <div class="btns" id="driveBtns" hidden>
+      <button class="link-btn" id="driveSync" type="button">Sincronizar ahora</button>
+      <button class="link-btn" id="driveOff" type="button">Desconectar</button>
+    </div>
   </section>
 
   <section class="backup">
@@ -366,6 +383,7 @@ function render() {
       if (pendingDel !== g.id) { pendingDel = g.id; render(); setTimeout(() => { if (pendingDel === g.id) { pendingDel = null; render(); } }, 3000); return; }
       pendingDel = null;
       movs = movs.filter(x => x.id !== g.id); guardarMovs();
+      encolar([{ tipo: "borrar", id: g.id }]);
       render();
     };
     li.append(what, amt, del); ul.appendChild(li);
@@ -384,6 +402,7 @@ $("form").addEventListener("submit", e => {
   if (!guardarMovs()) { movs = movs.filter(x => x.id !== g.id); showMsg("No se pudo guardar en el celular. Revisá que haya espacio libre.", true); return; }
   $("monto").value = ""; $("nota").value = "";
   showMsg(`Guardado ${tipoMov}: ${fmt(monto)} en ${p.nombre} · ${g.cat}.`);
+  encolar([opAgregar(g)]);
   const [y, m] = g.fecha.split("-").map(Number);
   if (y !== view.getFullYear() || m !== view.getMonth() + 1) view = new Date(y, m - 1, 1);
   render();
@@ -418,6 +437,7 @@ $("projform").addEventListener("submit", e => {
     actual = agregarProyecto(nombre); escribir(K.tab, actual);
   }
   escribir(K.proy, proyectos);
+  encolar([opProyectos()]);
   closeProj(); render();
 });
 
@@ -487,6 +507,7 @@ function importar(wb) {
   const clave = g => [proyectoDe(g), movDe(g), g.fecha, g.monto, g.cat, g.nota || ""].join("|");
   const existentes = new Set(movs.map(clave));
   let nuevos = 0, repetidos = 0;
+  const agregados = [];
   for (const nombreHoja of wb.SheetNames) {
     if (nombreHoja.toLowerCase() === "resumen") continue;
     const filas = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, raw: true, defval: "" });
@@ -508,11 +529,12 @@ function importar(wb) {
       if (!(monto > 0)) continue;
       const g = { id: nuevoId(), proyecto: p.id, mov, monto: Math.round(monto), cat: String(f[iC] || "Otros"), nota: iN >= 0 ? String(f[iN] || "") : "", fecha, creado: Date.now() };
       if (existentes.has(clave(g))) { repetidos++; continue; }
-      existentes.add(clave(g)); movs.push(g); nuevos++;
+      existentes.add(clave(g)); movs.push(g); agregados.push(g); nuevos++;
     }
   }
   escribir(K.proy, proyectos);
   guardarMovs();
+  if (agregados.length) encolar([opProyectos(), ...agregados.map(opAgregar)]);
   return { nuevos, repetidos };
 }
 $("importBtn").onclick = () => $("importFile").click();
@@ -532,7 +554,69 @@ $("importFile").addEventListener("change", async e => {
   }
 });
 
+// Google Sheets: cada cambio entra en una cola y se manda cuando hay internet
+const KD = { cfg: "mg-drive", cola: "mg-drive-cola", ultima: "mg-drive-ultima" };
+let enviando = false, errorDrive = null;
+const driveCfg = () => leer(KD.cfg, null);
+const opProyectos = () => ({ tipo: "proyectos", lista: proyectos.map(({ id, nombre }) => ({ id, nombre })) });
+const opAgregar = g => ({ tipo: "agregar", mov: { ...g, proyectoNombre: (proyectos.find(p => p.id === proyectoDe(g)) || {}).nombre } });
+
+function encolar(ops) {
+  if (!driveCfg()) return;
+  escribir(KD.cola, [...leer(KD.cola, []), ...ops]);
+  sincronizar();
+}
+
+async function sincronizar() {
+  const cfg = driveCfg(), cola = leer(KD.cola, []);
+  if (enviando || !cfg || !cola.length || !navigator.onLine) { renderDrive(); return; }
+  enviando = true; renderDrive();
+  const lote = cola.slice(0, 150);
+  try {
+    const r = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ clave: cfg.clave, ops: lote }) });
+    const j = await r.json();
+    if (!j.ok) throw j;
+    escribir(KD.cola, leer(KD.cola, []).slice(lote.length));
+    escribir(KD.ultima, Date.now());
+    errorDrive = null;
+  } catch (e) {
+    errorDrive = e && e.error === "clave" ? "La clave no coincide con la del código de la planilla." : "No se pudo conectar con la planilla. Se reintenta solo.";
+  }
+  enviando = false;
+  if (!errorDrive && leer(KD.cola, []).length) return sincronizar();
+  renderDrive();
+}
+
+function renderDrive() {
+  const cfg = driveCfg(), pend = leer(KD.cola, []).length, p = $("driveNote");
+  $("driveForm").hidden = !!cfg; $("driveBtns").hidden = !cfg;
+  if (!cfg) { p.className = ""; p.textContent = "Conectá la app con tu planilla de Google para que cada movimiento se anote solo."; return; }
+  if (enviando) { p.className = ""; p.textContent = "Enviando a la planilla…"; return; }
+  if (errorDrive) { p.className = "warn"; p.textContent = errorDrive + (pend ? ` (${pend} cambios pendientes)` : ""); return; }
+  if (pend) { p.className = ""; p.textContent = `${pend} ${pend === 1 ? "cambio espera" : "cambios esperan"} internet para anotarse en la planilla.`; return; }
+  const u = leer(KD.ultima, null);
+  p.className = "ok";
+  p.textContent = "Planilla al día" + (u ? ` · ${new Date(u).toLocaleString("es-PY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "");
+}
+
+$("driveForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const url = $("driveUrl").value.trim(), clave = $("driveClave").value.trim();
+  if (!/^https:\/\/script\.google\.com\/.+\/exec/.test(url)) { $("driveNote").className = "warn"; $("driveNote").textContent = "La dirección tiene que empezar con https://script.google.com/ y terminar en /exec."; return; }
+  if (!clave) { $("driveNote").className = "warn"; $("driveNote").textContent = "Falta la clave."; return; }
+  escribir(KD.cfg, { url, clave });
+  escribir(KD.cola, []);
+  errorDrive = null;
+  encolar([opProyectos(), ...movs.map(opAgregar)]);
+});
+$("driveSync").onclick = () => { errorDrive = null; if (!leer(KD.cola, []).length) encolar([opProyectos()]); else sincronizar(); };
+$("driveOff").onclick = () => { try { localStorage.removeItem(KD.cfg); localStorage.removeItem(KD.cola); } catch {} errorDrive = null; renderDrive(); };
+window.addEventListener("online", sincronizar);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sincronizar(); });
+setInterval(() => { if (leer(KD.cola, []).length) sincronizar(); }, 60000);
+
 render();
+sincronizar();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

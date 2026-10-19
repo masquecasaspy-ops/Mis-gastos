@@ -1,6 +1,6 @@
 // Guarda la app en el celular para que abra sin internet.
 // Al cambiar cualquier archivo, subir el número de versión.
-const CACHE = "mis-gastos-v3";
+const CACHE = "mis-gastos-v4";
 const ARCHIVOS = [
   "./",
   "./index.html",
