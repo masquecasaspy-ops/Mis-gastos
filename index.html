@@ -86,9 +86,10 @@ form.add { background: var(--surface); border: 1px solid var(--line); border-rad
 .seg button { border: 0; background: transparent; border-radius: 8px; padding: 8px; font-weight: 600; color: var(--muted); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .seg button.in[aria-pressed="true"] { color: var(--accent); }
-.amount-field { display: flex; align-items: baseline; gap: 8px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+.amount-field { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
 form.add.is-ingreso .amount-field { border-bottom-color: var(--accent); }
 form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
+.quick-save { flex: none; width: 48px; height: 48px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-size: 24px; font-weight: 700; line-height: 1; }
 .amount-field span { font-family: var(--f-num); color: var(--muted); font-size: 20px; }
 .amount-field input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--f-num); font-size: 30px; font-weight: 600; outline: none; padding: 0; }
 .cats { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -150,10 +151,11 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
       <button type="button" id="tGasto" aria-pressed="true">Gasto</button>
       <button type="button" id="tIngreso" class="in" aria-pressed="false">Ingreso</button>
     </div>
-    <label class="amount-field">
+    <div class="amount-field">
       <span>₲</span>
-      <input id="monto" inputmode="numeric" placeholder="0" aria-label="Monto en guaraníes">
-    </label>
+      <input id="monto" inputmode="numeric" enterkeyhint="done" placeholder="0" aria-label="Monto en guaraníes">
+      <button class="quick-save" id="quickSave" type="submit" aria-label="Guardar">✓</button>
+    </div>
     <div class="cats" id="cats" role="group" aria-label="Categoría"></div>
     <div class="row">
       <input id="nota" placeholder="Nota (opcional)" maxlength="80" aria-label="Nota">
@@ -306,6 +308,9 @@ $("tGasto").onclick = () => setTipo("gasto");
 $("tIngreso").onclick = () => setTipo("ingreso");
 
 $("fecha").value = today();
+$("monto").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); $("form").requestSubmit(); }
+});
 $("monto").addEventListener("input", e => {
   const digits = e.target.value.replace(/\D/g, "").slice(0, 12);
   e.target.value = digits ? Number(digits).toLocaleString("es-PY") : "";
@@ -401,6 +406,7 @@ $("form").addEventListener("submit", e => {
   movs = [...movs, g];
   if (!guardarMovs()) { movs = movs.filter(x => x.id !== g.id); showMsg("No se pudo guardar en el celular. Revisá que haya espacio libre.", true); return; }
   $("monto").value = ""; $("nota").value = "";
+  $("monto").blur();
   showMsg(`Guardado ${tipoMov}: ${fmt(monto)} en ${p.nombre} · ${g.cat}.`);
   encolar([opAgregar(g)]);
   const [y, m] = g.fecha.split("-").map(Number);
