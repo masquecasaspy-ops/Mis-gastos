@@ -108,14 +108,26 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
 .bar .fill { height: 100%; background: var(--accent); border-radius: 3px; }
 .bar .pct { color: var(--muted); font-size: 12px; margin-left: 6px; }
 
+.movs { display: flex; flex-direction: column; gap: 10px; }
+.movs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.seg-sm { grid-template-columns: auto auto; }
+.seg-sm button { padding: 6px 12px; font-size: 13px; }
+.movs-search { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; padding: 10px 12px; }
+.day { display: flex; flex-direction: column; }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 14px 4px 6px; font-size: 13px; color: var(--muted); }
+.day-head b { color: var(--ink); font-weight: 600; }
+.day-head b::first-letter { text-transform: uppercase; }
+.day-head .num { font-size: 13px; }
 .list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
-.list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 12px 10px 12px 14px; border-top: 1px solid var(--line); }
 .list li:first-child { border-top: 0; }
-.list .what { min-width: 0; }
-.list .what b { font-weight: 600; display: block; }
-.list .what small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .what { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.list .what b { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+.list .what small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .amt { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; white-space: nowrap; }
 .list .in-amt { color: var(--accent); }
-.del { border: 0; background: transparent; color: var(--muted); width: 32px; height: 32px; border-radius: 8px; font-size: 18px; line-height: 1; }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); margin-right: 6px; vertical-align: 1px; }
+.del { border: 0; background: transparent; color: var(--muted); width: 36px; height: 36px; border-radius: 8px; font-size: 18px; line-height: 1; }
 .del.confirm { background: var(--danger); color: #fff; width: auto; padding: 0 10px; font-size: 13px; font-weight: 600; }
 .empty { color: var(--muted); padding: 18px 14px; text-align: center; }
 .list li.empty { display: block; }
@@ -187,15 +199,23 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
     </div>
   </section>
 
+  <section class="movs">
+    <div class="movs-head">
+      <h2>Movimientos</h2>
+      <div class="seg seg-sm" role="group" aria-label="Qué movimientos ver">
+        <button type="button" id="verProy" aria-pressed="true">Este proyecto</button>
+        <button type="button" id="verTodos" aria-pressed="false">Todos</button>
+      </div>
+    </div>
+    <input class="movs-search" id="buscarMov" type="search" placeholder="Buscar por nota o categoría" aria-label="Buscar movimientos">
+    <div id="list"><p class="empty">Cargando…</p></div>
+  </section>
+
   <section class="breakdown" id="breakdownWrap">
     <h2>Gastos por categoría</h2>
     <div class="breakdown" id="breakdown"></div>
   </section>
 
-  <section style="display:flex;flex-direction:column;gap:10px">
-    <h2>Movimientos</h2>
-    <ul class="list" id="list"><li class="empty">Cargando…</li></ul>
-  </section>
 
   <section class="backup" id="driveSec">
     <h2>Google Sheets</h2>
@@ -260,6 +280,8 @@ let cat = null;
 let view = new Date(); view.setDate(1);
 let pendingDel = null;
 let projMode = null;
+let verTodos = leer("mg-ver-todos", false);
+let busqueda = "";
 
 const guardarMovs = () => escribir(K.movs, movs);
 const proyectoDe = g => g.proyecto || "personal";
@@ -362,38 +384,81 @@ function render() {
     row.append(name, val, tr); bd.appendChild(row);
   });
 
-  const ul = $("list"); ul.replaceChildren();
-  if (!mes.length) {
-    const li = document.createElement("li"); li.className = "empty";
-    li.textContent = `Acá van a aparecer los ingresos y gastos de ${p.nombre} de este mes.`;
-    ul.appendChild(li); return;
-  }
-  mes.forEach(g => {
-    const esIn = movDe(g) === "ingreso";
-    const li = document.createElement("li");
-    const what = document.createElement("div"); what.className = "what";
-    const b = document.createElement("b"); b.textContent = (esIn ? "Ingreso · " : "") + g.cat;
-    const s = document.createElement("small");
-    const [, m, d] = g.fecha.split("-");
-    s.textContent = `${d}/${m}` + (g.nota ? " · " + g.nota : "");
-    what.append(b, s);
-    const amt = document.createElement("span"); amt.className = "num" + (esIn ? " in-amt" : "");
-    amt.textContent = (esIn ? "+" : "−") + fmt(g.monto);
-    const del = document.createElement("button"); del.type = "button"; del.className = "del";
-    const confirming = pendingDel === g.id;
-    del.textContent = confirming ? "Borrar" : "×";
-    del.setAttribute("aria-label", confirming ? "Confirmar borrado" : "Borrar movimiento");
-    if (confirming) del.classList.add("confirm");
-    del.onclick = () => {
-      if (pendingDel !== g.id) { pendingDel = g.id; render(); setTimeout(() => { if (pendingDel === g.id) { pendingDel = null; render(); } }, 3000); return; }
-      pendingDel = null;
-      movs = movs.filter(x => x.id !== g.id); guardarMovs();
-      encolar([{ tipo: "borrar", id: g.id }]);
-      render();
-    };
-    li.append(what, amt, del); ul.appendChild(li);
-  });
+  renderLista(key);
 }
+
+const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function nombreDia(f) {
+  if (f === today()) return "Hoy";
+  const d = new Date(f + "T12:00:00"), ay = new Date(); ay.setDate(ay.getDate() - 1);
+  if (f === isoDe(ay)) return "Ayer";
+  return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`;
+}
+
+function renderLista(key) {
+  const p = proy();
+  $("verProy").setAttribute("aria-pressed", !verTodos);
+  $("verTodos").setAttribute("aria-pressed", verTodos);
+  $("verProy").textContent = p.nombre;
+  const q = busqueda.trim().toLowerCase();
+  const nombreProy = id => (proyectos.find(x => x.id === id) || {}).nombre || id;
+  const lista = movs
+    .filter(g => g.fecha.startsWith(key) && (verTodos || proyectoDe(g) === p.id))
+    .filter(g => !q || [g.nota, g.cat, nombreProy(proyectoDe(g))].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado - a.creado);
+  const cont = $("list"); cont.replaceChildren();
+  if (!lista.length) {
+    const e = document.createElement("p"); e.className = "empty";
+    e.textContent = q ? "Nada coincide con la búsqueda." : verTodos ? "No hay movimientos este mes." : `Todavía no hay movimientos de ${p.nombre} este mes.`;
+    cont.appendChild(e); return;
+  }
+  const porDia = new Map();
+  lista.forEach(g => { if (!porDia.has(g.fecha)) porDia.set(g.fecha, []); porDia.get(g.fecha).push(g); });
+  for (const [fecha, items] of porDia) {
+    const day = document.createElement("div"); day.className = "day";
+    const head = document.createElement("div"); head.className = "day-head";
+    const t = document.createElement("b"); t.textContent = nombreDia(fecha);
+    const gastoDia = sum(items, "gasto");
+    const tot = document.createElement("span"); tot.className = "num"; tot.textContent = gastoDia ? "Gastado " + fmt(gastoDia) : "";
+    head.append(t, tot);
+    const ul = document.createElement("ul"); ul.className = "list";
+    items.forEach(g => ul.appendChild(itemMov(g, nombreProy)));
+    day.append(head, ul); cont.appendChild(day);
+  }
+}
+
+function itemMov(g, nombreProy) {
+  const esIn = movDe(g) === "ingreso";
+  const li = document.createElement("li");
+  const what = document.createElement("div"); what.className = "what";
+  const b = document.createElement("b");
+  if (esIn) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "Ingreso"; b.appendChild(tg); }
+  b.append(g.nota || g.cat);
+  const s = document.createElement("small");
+  s.textContent = [g.nota ? g.cat : "", verTodos ? nombreProy(proyectoDe(g)) : ""].filter(Boolean).join(" · ") || "Sin nota";
+  what.append(b, s);
+  const amt = document.createElement("span"); amt.className = "amt" + (esIn ? " in-amt" : "");
+  amt.textContent = (esIn ? "+" : "−") + fmt(g.monto);
+  const del = document.createElement("button"); del.type = "button"; del.className = "del";
+  const confirming = pendingDel === g.id;
+  del.textContent = confirming ? "Borrar" : "×";
+  del.setAttribute("aria-label", confirming ? "Confirmar borrado" : "Borrar movimiento");
+  if (confirming) del.classList.add("confirm");
+  del.onclick = () => {
+    if (pendingDel !== g.id) { pendingDel = g.id; render(); setTimeout(() => { if (pendingDel === g.id) { pendingDel = null; render(); } }, 3000); return; }
+    pendingDel = null;
+    movs = movs.filter(x => x.id !== g.id); guardarMovs();
+    encolar([{ tipo: "borrar", id: g.id }]);
+    render();
+  };
+  li.append(what, amt, del);
+  return li;
+}
+
+$("verProy").onclick = () => { verTodos = false; escribir("mg-ver-todos", false); render(); };
+$("verTodos").onclick = () => { verTodos = true; escribir("mg-ver-todos", true); render(); };
+$("buscarMov").addEventListener("input", e => { busqueda = e.target.value; render(); });
 
 function showMsg(t, err) { const m = $("msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); }
 
