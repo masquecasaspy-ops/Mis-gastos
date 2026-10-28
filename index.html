@@ -55,6 +55,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .month span { min-width: 108px; text-align: center; font-weight: 600; }
 .month span::first-letter { text-transform: uppercase; }
 
+.al-dia { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-decoration: none; color: var(--ink); background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; }
+.al-dia span:first-child { display: flex; flex-direction: column; min-width: 0; }
+.al-dia b { font-weight: 600; color: var(--accent); }
+.al-dia small { font-size: 12px; color: var(--muted); }
+.al-dia .flecha { font-size: 18px; color: var(--accent); flex: none; }
 .tabs-scroll { overflow-x: auto; margin-inline: -4px; padding: 2px 4px 6px; scrollbar-width: none; }
 .tabs-scroll::-webkit-scrollbar { display: none; }
 .tabs { display: flex; gap: 6px; width: max-content; }
@@ -134,6 +139,11 @@ form.add.is-gasto .amount-field { border-bottom-color: var(--ink); }
 </head>
 <body>
 <div class="wrap">
+  <a class="al-dia" href="https://claude.ai/artifact/FCpeEwKLxQDHhrnK6bMYEA" target="_blank" rel="noopener">
+    <span><b>Ver mis gastos al día</b><small>Resumen, proyectos y lo que falta cargar del banco</small></span>
+    <span class="flecha" aria-hidden="true">↗</span>
+  </a>
+
   <nav class="tabs-scroll" aria-label="Proyectos">
     <div class="tabs" id="tabs" role="tablist"></div>
   </nav>
